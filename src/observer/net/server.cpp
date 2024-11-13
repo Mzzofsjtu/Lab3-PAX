@@ -35,7 +35,6 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/mutex.h"
 #include "common/log/log.h"
 #include "event/session_event.h"
-#include "session/session_stage.h"
 #include "net/communicator.h"
 #include "net/cli_communicator.h"
 #include "session/session.h"

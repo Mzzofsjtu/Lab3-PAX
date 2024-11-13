@@ -30,7 +30,8 @@ RC SqlTaskHandler::handle_event(Communicator *communicator)
     return RC::SUCCESS;
   }
 
-  session_stage_.handle_request2(event);
+  Session::set_current_session(event->session());
+  event->session()->set_current_request(event);
 
   SQLStageEvent sql_event(event, event->query());
 

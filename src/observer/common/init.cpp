@@ -24,7 +24,6 @@ See the Mulan PSL v2 for more details. */
 #include "common/os/signal.h"
 #include "global_context.h"
 #include "session/session.h"
-#include "session/session_stage.h"
 #include "sql/plan_cache/plan_cache_stage.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/default/default_handler.h"
@@ -129,10 +128,7 @@ void cleanup_log()
   }
 }
 
-int prepare_init_seda()
-{
-  return 0;
-}
+int prepare_init_seda() { return 0; }
 
 int init_global_objects(ProcessParam *process_param, Ini &properties)
 {
@@ -140,9 +136,8 @@ int init_global_objects(ProcessParam *process_param, Ini &properties)
 
   int ret = 0;
 
-  RC rc = GCTX.handler_->init("miniob", 
-                              process_param->trx_kit_name().c_str(),
-                              process_param->durability_mode().c_str());
+  RC rc =
+      GCTX.handler_->init("miniob", process_param->trx_kit_name().c_str(), process_param->durability_mode().c_str());
   if (OB_FAIL(rc)) {
     LOG_ERROR("failed to init handler. rc=%s", strrc(rc));
     return -1;

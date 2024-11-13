@@ -14,7 +14,6 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/buffer/frame.h"
 #include "session/session.h"
-#include "session/thread_data.h"
 
 FrameId::FrameId(int buffer_pool_id, PageNum page_num) : buffer_pool_id_(buffer_pool_id), page_num_(page_num) {}
 
@@ -40,15 +39,6 @@ string FrameId::to_string() const
 ////////////////////////////////////////////////////////////////////////////////
 intptr_t get_default_debug_xid()
 {
-#if 0
-  ThreadData *thd = ThreadData::current();
-  intptr_t xid = (thd == nullptr) ? 
-                 // pthread_self的返回值类型是pthread_t，pthread_t在linux和mac上不同
-                 // 在Linux上是一个整数类型，而在mac上是一个指针。为了能在两个平台上都编译通过，
-                 // 就将pthread_self返回值转换两次
-                 reinterpret_cast<intptr_t>(reinterpret_cast<void*>(pthread_self())) : 
-                 reinterpret_cast<intptr_t>(thd);
-#endif
   Session *session = Session::current_session();
   if (session == nullptr) {
     return reinterpret_cast<intptr_t>(reinterpret_cast<void *>(pthread_self()));
