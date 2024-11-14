@@ -719,14 +719,14 @@ class TestSuite:
             lines1 = f1.readlines()
             lines2 = f2.readlines()
             if len(lines1) != len(lines2):
-                _logger.info('file1=%s, file2=%s, #line1=%d, #line2=%d', file1,
+                _logger.info('file1 = %s, file2 = %s, #line1=%d, #line2=%d', file1,
                              file2, len(lines1), len(lines2))
                 return False
 
             line_num = len(lines1)
             for i in range(line_num):
                 if lines1[i].upper() != lines2[i].upper():
-                    _logger.info('file1=%s, file2=%s, line1=%s, line2=%s',
+                    _logger.info('file1 = %s, file2 = %s, line1=%s, line2=%s',
                                  file1, file2, lines1[i].strip(), lines2[i].strip())
                     return False
             return True
