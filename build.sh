@@ -81,8 +81,8 @@ function do_init
 
   # build libevent
   cd ${TOPDIR}/deps/3rd/libevent && \
-    mkdir -p build && \
-    cd build && \
+    mkdir -p tmp && \
+    cd tmp && \
     ${CMAKE_COMMAND_THIRD_PARTY} .. -DEVENT__DISABLE_OPENSSL=ON -DEVENT__LIBRARY_TYPE=BOTH && \
     ${MAKE_COMMAND} -j4 && \
     make install
