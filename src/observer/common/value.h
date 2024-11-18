@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "common/date.h"
 #include "common/lang/string.h"
 #include "common/lang/memory.h"
 #include "common/type/attr_type.h"
@@ -35,6 +36,7 @@ public:
   friend class BooleanType;
   friend class CharType;
   friend class VectorType;
+  friend class DateType;
 
   Value() = default;
 
@@ -45,6 +47,7 @@ public:
   explicit Value(int val);
   explicit Value(float val);
   explicit Value(bool val);
+  explicit Value(date_t val);
   explicit Value(const char *s, int len = 0);
 
   Value(const Value &other);
@@ -109,12 +112,14 @@ public:
   float  get_float() const;
   string get_string() const;
   bool   get_boolean() const;
+  date_t get_date() const;
 
 private:
   void set_int(int val);
   void set_float(float val);
   void set_string(const char *s, int len = 0);
   void set_string_from_other(const Value &other);
+  void set_date(date_t val);
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;
@@ -125,6 +130,7 @@ private:
     int32_t int_value_;
     float   float_value_;
     bool    bool_value_;
+    date_t  date_value_;
     char   *pointer_value_;
   } value_ = {.int_value_ = 0};
 

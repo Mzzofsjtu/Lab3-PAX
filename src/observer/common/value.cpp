@@ -28,6 +28,8 @@ Value::Value(bool val) { set_boolean(val); }
 
 Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 
+Value::Value(date_t val) { set_date(val); }
+
 Value::Value(const Value &other)
 {
   this->attr_type_ = other.attr_type_;
@@ -125,6 +127,10 @@ void Value::set_data(char *data, int length)
       value_.bool_value_ = *(int *)data != 0;
       length_            = length;
     } break;
+    case AttrType::DATES: {
+      value_.date_value_ = *(date_t *)data;
+      length_            = length;
+    } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -146,11 +152,20 @@ void Value::set_float(float val)
   value_.float_value_ = val;
   length_             = sizeof(val);
 }
+
 void Value::set_boolean(bool val)
 {
   reset();
   attr_type_         = AttrType::BOOLEANS;
   value_.bool_value_ = val;
+  length_            = sizeof(val);
+}
+
+void Value::set_date(date_t val)
+{
+  reset();
+  attr_type_         = AttrType::DATES;
+  value_.date_value_ = val;
   length_            = sizeof(val);
 }
 
@@ -189,6 +204,9 @@ void Value::set_value(const Value &value)
     } break;
     case AttrType::BOOLEANS: {
       set_boolean(value.get_boolean());
+    } break;
+    case AttrType::DATES: {
+      set_date(value.get_date());
     } break;
     default: {
       ASSERT(false, "got an invalid value type");
@@ -229,7 +247,10 @@ string Value::to_string() const
   return res;
 }
 
-int Value::compare(const Value &other) const { return DataType::type_instance(this->attr_type_)->compare(*this, other); }
+int Value::compare(const Value &other) const
+{
+  return DataType::type_instance(this->attr_type_)->compare(*this, other);
+}
 
 int Value::get_int() const
 {
@@ -326,4 +347,18 @@ bool Value::get_boolean() const
     }
   }
   return false;
+}
+
+date_t Value::get_date() const
+{
+  switch (attr_type_) {
+    case AttrType::DATES: {
+      return value_.date_value_;
+    } break;
+    default: {
+      LOG_WARN("unknown data type. type=%d", attr_type_);
+      return {};
+    }
+  }
+  return {};
 }
