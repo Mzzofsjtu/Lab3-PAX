@@ -896,7 +896,14 @@ bool Date::from_string(const char *str, Date &date)
     if (num_components == 3) {
       return false;
     }
-    auto [_, ec] = std::from_chars(unit.begin(), unit.end(), date_units[num_components]);
+    // 以下代码在提测时编译报错(似乎是gcc11的问题)
+    // auto [_, ec] = std::from_chars(unit.begin(), unit.end(), date_units[num_components]);
+
+    std::string s;
+    for (auto c : unit) {
+      s.push_back(c);
+    }
+    auto [_, ec] = std::from_chars(s.data(), s.data() + s.size(), date_units[num_components]);
     if (ec != std::errc()) {
       return false;
     }
