@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <algorithm>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -22,7 +21,7 @@ string token_name(const char *sql_string, YYLTYPE *llocp)
 
 int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, const char *msg)
 {
-  std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
+  unique_ptr<ParsedSqlNode> error_sql_node = make_unique<ParsedSqlNode>(SCF_ERROR);
   error_sql_node->error.error_msg = msg;
   error_sql_node->error.line = llocp->first_line;
   error_sql_node->error.column = llocp->first_column;
@@ -121,23 +120,23 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   Value *                                    value;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
-  std::vector<AttrInfoSqlNode> *             attr_infos;
+  vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
-  std::vector<std::unique_ptr<Expression>> * expression_list;
-  std::vector<Value> *                       value_list;
-  std::vector<ConditionSqlNode> *            condition_list;
-  std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
-  char *                                     string;
+  vector<unique_ptr<Expression>> * expression_list;
+  vector<Value> *                       value_list;
+  vector<ConditionSqlNode> *            condition_list;
+  vector<RelAttrSqlNode> *              rel_attr_list;
+  vector<string> *                 relation_list;
+  char *                                     cstring;
   int                                        number;
   float                                      floats;
 }
 
 %token <number> NUMBER
 %token <floats> FLOAT
-%token <string> ID
-%token <string> SSS
+%token <cstring> ID
+%token <cstring> SSS
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -145,7 +144,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
-%type <string>              relation
+%type <cstring>             relation
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <attr_infos>          attr_def_list
@@ -153,7 +152,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 %type <value_list>          value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
-%type <string>              storage_format
+%type <cstring>             storage_format
 %type <relation_list>       rel_list
 %type <expression>          expression
 %type <expression_list>     expression_list
@@ -189,7 +188,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 
 commands: command_wrapper opt_semicolon  //commands or sqls. parser starts here.
   {
-    std::unique_ptr<ParsedSqlNode> sql_node = std::unique_ptr<ParsedSqlNode>($1);
+    unique_ptr<ParsedSqlNode> sql_node = unique_ptr<ParsedSqlNode>($1);
     sql_result->add_sql_node(std::move(sql_node));
   }
   ;
@@ -256,7 +255,6 @@ drop_table_stmt:    /*drop table 语句的语法解析树*/
     DROP TABLE ID {
       $$ = new ParsedSqlNode(SCF_DROP_TABLE);
       $$->drop_table.relation_name = $3;
-      free($3);
     };
 
 show_tables_stmt:
@@ -269,7 +267,6 @@ desc_table_stmt:
     DESC ID  {
       $$ = new ParsedSqlNode(SCF_DESC_TABLE);
       $$->desc_table.relation_name = $2;
-      free($2);
     }
     ;
 
@@ -281,9 +278,6 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $3;
       create_index.relation_name = $5;
       create_index.attribute_name = $7;
-      free($3);
-      free($5);
-      free($7);
     }
     ;
 
@@ -293,8 +287,6 @@ drop_index_stmt:      /*drop index 语句的语法解析树*/
       $$ = new ParsedSqlNode(SCF_DROP_INDEX);
       $$->drop_index.index_name = $3;
       $$->drop_index.relation_name = $5;
-      free($3);
-      free($5);
     }
     ;
 create_table_stmt:    /*create table 语句的语法解析树*/
@@ -303,20 +295,19 @@ create_table_stmt:    /*create table 语句的语法解析树*/
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
       create_table.relation_name = $3;
-      free($3);
+      //free($3);
 
-      std::vector<AttrInfoSqlNode> *src_attrs = $6;
+      vector<AttrInfoSqlNode> *src_attrs = $6;
 
       if (src_attrs != nullptr) {
         create_table.attr_infos.swap(*src_attrs);
         delete src_attrs;
       }
       create_table.attr_infos.emplace_back(*$5);
-      std::reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
+      reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
       delete $5;
       if ($8 != nullptr) {
         create_table.storage_format = $8;
-        free($8);
       }
     }
     ;
@@ -330,7 +321,7 @@ attr_def_list:
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<AttrInfoSqlNode>;
+        $$ = new vector<AttrInfoSqlNode>;
       }
       $$->emplace_back(*$2);
       delete $2;
@@ -344,7 +335,6 @@ attr_def:
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = $4;
-      free($1);
     }
     | ID type
     {
@@ -352,7 +342,6 @@ attr_def:
       $$->type = (AttrType)$2;
       $$->name = $1;
       $$->length = 4;
-      free($1);
     }
     ;
 number:
@@ -375,9 +364,8 @@ insert_stmt:        /*insert   语句的语法解析树*/
         delete $7;
       }
       $$->insertion.values.emplace_back(*$6);
-      std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
+      reverse($$->insertion.values.begin(), $$->insertion.values.end());
       delete $6;
-      free($3);
     }
     ;
 
@@ -390,7 +378,7 @@ value_list:
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<Value>;
+        $$ = new vector<Value>;
       }
       $$->emplace_back(*$2);
       delete $2;
@@ -409,7 +397,6 @@ value:
       char *tmp = common::substr($1,1,strlen($1)-2);
       $$ = new Value(tmp);
       free(tmp);
-      free($1);
     }
     ;
 storage_format:
@@ -432,7 +419,6 @@ delete_stmt:    /*  delete 语句的语法解析树*/
         $$->deletion.conditions.swap(*$4);
         delete $4;
       }
-      free($3);
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
@@ -446,8 +432,6 @@ update_stmt:      /*  update 语句的语法解析树*/
         $$->update.conditions.swap(*$7);
         delete $7;
       }
-      free($2);
-      free($4);
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
@@ -487,7 +471,7 @@ calc_stmt:
 expression_list:
     expression
     {
-      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$ = new vector<unique_ptr<Expression>>;
       $$->emplace_back($1);
     }
     | expression COMMA expression_list
@@ -495,7 +479,7 @@ expression_list:
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::unique_ptr<Expression>>;
+        $$ = new vector<unique_ptr<Expression>>;
       }
       $$->emplace($$->begin(), $1);
     }
@@ -544,14 +528,11 @@ rel_attr:
     ID {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
-      free($1);
     }
     | ID DOT ID {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
-      free($1);
-      free($3);
     }
     ;
 
@@ -562,19 +543,17 @@ relation:
     ;
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
+      $$ = new vector<string>();
       $$->push_back($1);
-      free($1);
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new vector<string>;
       }
 
       $$->insert($$->begin(), $1);
-      free($1);
     }
     ;
 
@@ -593,7 +572,7 @@ condition_list:
       $$ = nullptr;
     }
     | condition {
-      $$ = new std::vector<ConditionSqlNode>;
+      $$ = new vector<ConditionSqlNode>;
       $$->emplace_back(*$1);
       delete $1;
     }
@@ -678,7 +657,6 @@ load_data_stmt:
       $$ = new ParsedSqlNode(SCF_LOAD_DATA);
       $$->load_data.relation_name = $7;
       $$->load_data.file_name = tmp_file_name;
-      free($7);
       free(tmp_file_name);
     }
     ;
@@ -687,7 +665,7 @@ explain_stmt:
     EXPLAIN command_wrapper
     {
       $$ = new ParsedSqlNode(SCF_EXPLAIN);
-      $$->explain.sql_node = std::unique_ptr<ParsedSqlNode>($2);
+      $$->explain.sql_node = unique_ptr<ParsedSqlNode>($2);
     }
     ;
 
@@ -697,7 +675,6 @@ set_variable_stmt:
       $$ = new ParsedSqlNode(SCF_SET_VARIABLE);
       $$->set_variable.name  = $2;
       $$->set_variable.value = *$4;
-      free($2);
       delete $4;
     }
     ;
@@ -711,9 +688,16 @@ extern void scan_string(const char *str, yyscan_t scanner);
 
 int sql_parse(const char *s, ParsedSqlResult *sql_result) {
   yyscan_t scanner;
-  yylex_init(&scanner);
+  std::vector<char *> allocated_strings;
+  yylex_init_extra(static_cast<void*>(&allocated_strings),&scanner);
   scan_string(s, scanner);
   int result = yyparse(s, sql_result, scanner);
+
+  for (char *ptr : allocated_strings) {
+    free(ptr);
+  }
+  allocated_strings.clear();
+
   yylex_destroy(scanner);
   return result;
 }
