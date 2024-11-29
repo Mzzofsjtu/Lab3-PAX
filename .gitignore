@@ -33,3 +33,6 @@ src/observer/sql/parser/yacc_sql.hpp
 # ignore database files
 miniob/
 *.log*
+*.record
+*.bp
+bplus_tree_log_test_dir/
