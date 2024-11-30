@@ -520,7 +520,6 @@ expression:
     }
     | ID LBRACE expression RBRACE {
       $$ = create_aggregate_expression($1, $3, sql_string, &@$);
-      free($1);
     }
     ;
 
@@ -647,6 +646,9 @@ group_by:
     /* empty */
     {
       $$ = nullptr;
+    }
+    | GROUP BY expression_list {
+      $$ = $3;
     }
     ;
 load_data_stmt:
