@@ -29,7 +29,7 @@ RC StandardAggregateHashTable::Scanner::next(Chunk &output_chunk)
   if (it_ == end_) {
     return RC::RECORD_EOF;
   }
-  while (it_ != end_ && output_chunk.rows() <= output_chunk.capacity()) {
+  while (it_ != end_ && output_chunk.rows() < output_chunk.capacity()) {
     auto &group_by_values = it_->first;
     auto &aggrs           = it_->second;
     for (int i = 0; i < output_chunk.column_num(); i++) {
