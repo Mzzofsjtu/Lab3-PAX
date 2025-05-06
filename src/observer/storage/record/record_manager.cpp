@@ -417,54 +417,49 @@ bool RecordPageHandler::is_full() const { return page_header_->record_num >= pag
 RC PaxRecordPageHandler::insert_record(const char *data, RID *rid)
 {
   // your code here
-  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY,
+  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, 
     "cannot insert record into page while the page is readonly");
-if (data == nullptr) {
-LOG_ERROR("Null data pointer passed to insert_record");
-return RC::INVALID_ARGUMENT;
-}
-if (page_header_->record_num >= page_header_->record_capacity) {
-LOG_WARN("Page is full, cannot insert. file:%d page:%d.",
-        disk_buffer_pool_->file_desc(), frame_->page_num());
-return RC::RECORD_NOMEM;
-}
-
-// Find free slot
-Bitmap bitmap(bitmap_, page_header_->record_capacity);
-int slot = bitmap.next_unsetted_bit(0);
-if (slot < 0) {
-LOG_WARN("No free slot found, capacity=%d.", page_header_->record_capacity);
-return RC::RECORD_NOMEM;
-}
-
-// Write-ahead log: record-level for PAX (all columns at once)
-RID tmp_rid{get_page_num(), slot};
-// RC rc = log_handler_.insert_record(frame_, tmp_rid, data, page_header_->column_num);
-// if (rc != RC::SUCCESS) {
-// LOG_ERROR("Failed to log insert_record at slot %d, rc=%s", slot, strrc(rc));
-// return rc;
-// }
-
-// Mark slot and update header
-bitmap.set_bit(slot);
-page_header_->record_num++;
-
-// Copy data into each column chunk
-for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
-int field_len = get_field_len(col_id);
-const char *src = data + static_cast<size_t>(col_id) * field_len;
-char *dst = get_field_data(slot, col_id);
-memcpy(dst, src, field_len);
-}
-
-// Dirty page and output RID
-frame_->mark_dirty();
-if (rid) {
-rid->page_num = tmp_rid.page_num;
-rid->slot_num = tmp_rid.slot_num;
-}
-
-return RC::SUCCESS;
+ 
+  // 判断页面是否已满。
+  if (page_header_->record_num == page_header_->record_capacity) {
+    LOG_WARN("Page is full, page_num %d:%d.", disk_buffer_pool_->file_desc(), frame_->page_num());
+    return RC::RECORD_NOMEM;
+  }
+ 
+  // Find empty location.
+  // 从 bitmap 中获取页面索引。
+  Bitmap bitmap(bitmap_, page_header_->record_capacity);
+  int    bitmapIndex = bitmap.next_unsetted_bit(0);
+  ASSERT(bitmapIndex >= 0, "The bit_map index smaller than 0!\n");
+  bitmap.set_bit(bitmapIndex);
+  page_header_->record_num++;
+ 
+  // The RC dealing with problems.
+  // 更新log。log是缓存系统的重要部份。
+  RC rc = log_handler_.insert_record(frame_, RID(get_page_num(), bitmapIndex), data);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to insert record. page_num %d:%d. rc=%s", disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
+    // return rc; // ignore errors
+  }
+ 
+  int data_offset = 0;
+  for(int col_id = 0; col_id < page_header_ -> column_num; col_id++) {
+    const int field_len = get_field_len(col_id);
+    const char *current_data = data + data_offset;
+    data_offset += field_len;
+    char *target = get_field_data(bitmapIndex, col_id);
+    memcpy(target, current_data, field_len);
+  }
+ 
+  frame_->mark_dirty();
+ 
+  if (rid) {
+    rid->page_num = get_page_num();
+    rid->slot_num = bitmapIndex;
+  }
+ 
+  // LOG_TRACE("Insert record. rid page_num=%d, slot num=%d", get_page_num(), index);
+  return RC::SUCCESS;
 }
 
 RC PaxRecordPageHandler::delete_record(const RID *rid)
@@ -494,73 +489,48 @@ RC PaxRecordPageHandler::delete_record(const RID *rid)
 RC PaxRecordPageHandler::get_record(const RID &rid, Record &record)
 {
   // your code here
-    // 1. Validate RID
-    if (rid.slot_num < 0 || rid.slot_num >= page_header_->record_capacity) {
-      LOG_ERROR("Invalid slot_num %d, exceed page capacity %d. frame=%s, header=%s",
-                rid.slot_num, page_header_->record_capacity,
-                frame_->to_string().c_str(), page_header_->to_string().c_str());
-      return RC::RECORD_INVALID_RID;
-    }
-  
-    // 2. Check occupancy via bitmap
-    Bitmap bitmap(bitmap_, page_header_->record_capacity);
-    if (!bitmap.get_bit(rid.slot_num)) {
-      LOG_ERROR("Slot %d is empty, cannot fetch record on page %d.",
-                rid.slot_num, frame_->page_num());
-      return RC::RECORD_NOT_EXIST;
-    }
-  
-    // 3. Allocate record buffer and set ownership
-    const int record_size = page_header_->record_real_size;
-    RC rc = record.new_record(record_size);
-    if (rc != RC::SUCCESS) {
-      LOG_ERROR("Failed to allocate record buffer, size=%d. rc=%s", record_size, strrc(rc));
-      return rc;
-    }
-  
-    // 4. Copy each field into record at correct offset
-    int offset = 0;
-    for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
-      int field_len = get_field_len(col_id);
-      char *src = get_field_data(rid.slot_num, col_id);
-      rc = record.set_field(offset, field_len, src);
-      if (rc != RC::SUCCESS) {
-        LOG_ERROR("Failed to set field for col %d, offset=%d, len=%d. rc=%s",
-                  col_id, offset, field_len, strrc(rc));
-        return rc;
-      }
-      offset += field_len;
-    }
-  
-    // 5. Set record ID
-    record.set_rid(rid);
-    return RC::SUCCESS;
+  if (rid.slot_num >= page_header_->record_capacity) {
+    LOG_ERROR("Invalid slot_num %d, exceed page's record capacity, frame=%s, page_header=%s",
+              rid.slot_num, frame_->to_string().c_str(), page_header_->to_string().c_str());
+    return RC::RECORD_INVALID_RID;
+  }
+ 
+  Bitmap bitmap(bitmap_, page_header_->record_capacity);
+  if (!bitmap.get_bit(rid.slot_num)) {
+    LOG_ERROR("Invalid slot_num:%d, slot is empty, page_num %d.", rid.slot_num, frame_->page_num());
+    return RC::RECORD_NOT_EXIST;
+  }
+ 
+  record.set_rid(rid);
+  record.new_record(page_header_ -> record_real_size);
+  int field_len_offset = 0;
+  for(int col_id = 0; col_id < page_header_ -> column_num; col_id++) {
+    const int field_len = get_field_len(col_id);
+    char *target = get_field_data(rid.slot_num, col_id);
+    record.set_field(field_len_offset, field_len, target);
+    field_len_offset += field_len;
+  }
+  return RC::SUCCESS;
 }
 
 // TODO: specify the column_ids that chunk needed. currenly we get all columns
 RC PaxRecordPageHandler::get_chunk(Chunk &chunk)
 {
   // your code here
+  const int n = chunk.column_num();
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
-  int capacity = page_header_->record_capacity;
-
-  // For each column, create a new Column and append data
-  for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
-    int field_len = get_field_len(col_id);
-    // Use CHARS since PAX stores raw bytes per field
-    auto col_ptr = std::make_unique<Column>(AttrType::CHARS, field_len);
-
-    // Append data for each valid slot
-    for (int slot = 0; slot < capacity; ++slot) {
-      if (!bitmap.get_bit(slot)) continue;
-      char *src = get_field_data(slot, col_id);
-      col_ptr->append(src, field_len);
+  // Get the column's refrences.
+  for(int i = 0; i < n; i++) {
+    int col_idx = chunk.column_ids(i);
+    Column *column = chunk.column_ptr(i);
+    for(int j = bitmap.next_setted_bit(0); j < page_header_ -> record_capacity; j = bitmap.next_setted_bit(j + 1)) {
+      if(j == -1) {
+        break;
+      }
+      char * data = get_field_data(j, col_idx);
+      column -> append_one(data);
     }
-
-    // Add this column to chunk
-    chunk.add_column(std::move(col_ptr), col_id);
   }
-
   return RC::SUCCESS;
 }
 

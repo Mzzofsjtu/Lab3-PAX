@@ -42,3 +42,22 @@ public:
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
 };
+
+class CountAggregator : public Aggregator
+{
+public:
+  CountAggregator(): count_(0) {}
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+protected:
+  int count_;   // For counting usage.
+};
+ 
+class AvgAggregator : public Aggregator
+{
+public:
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+protected:
+  float count_;  // For counting usage.
+};
