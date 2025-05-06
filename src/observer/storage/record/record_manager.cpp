@@ -494,38 +494,47 @@ RC PaxRecordPageHandler::delete_record(const RID *rid)
 RC PaxRecordPageHandler::get_record(const RID &rid, Record &record)
 {
   // your code here
-  if (rid.slot_num < 0 || rid.slot_num >= page_header_->record_capacity) {
-    LOG_ERROR("Invalid slot_num %d, exceed page capacity %d. frame=%s, header=%s", 
-              rid.slot_num, page_header_->record_capacity, 
-              frame_->to_string().c_str(), page_header_->to_string().c_str());
-    return RC::RECORD_INVALID_RID;
-  }
-
-  // 2. Check slot occupancy via bitmap
-  Bitmap bitmap(bitmap_, page_header_->record_capacity);
-  if (!bitmap.get_bit(rid.slot_num)) {
-    LOG_ERROR("Slot %d is empty, cannot fetch record on page %d.", 
-              rid.slot_num, frame_->page_num());
-    return RC::RECORD_NOT_EXIST;
-  }
-
-  // 3. Assemble record data from column chunks into contiguous buffer
-  const int record_size = page_header_->record_real_size;
-  char *buffer = new char[record_size];
-  for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
-    int field_len = get_field_len(col_id);
-    char *src = get_field_data(rid.slot_num, col_id);
-    memcpy(buffer + static_cast<size_t>(col_id) * field_len, src, field_len);
-  }
-
-  // 4. Populate Record (assumes deep-copy in set_data)
-  record.set_rid(rid);
-  record.set_data(buffer, record_size);
-
-  // // 5. Cleanup temporary buffer
-  // delete[] buffer;
-
-  return RC::SUCCESS;
+    // 1. Validate RID
+    if (rid.slot_num < 0 || rid.slot_num >= page_header_->record_capacity) {
+      LOG_ERROR("Invalid slot_num %d, exceed page capacity %d. frame=%s, header=%s",
+                rid.slot_num, page_header_->record_capacity,
+                frame_->to_string().c_str(), page_header_->to_string().c_str());
+      return RC::RECORD_INVALID_RID;
+    }
+  
+    // 2. Check occupancy via bitmap
+    Bitmap bitmap(bitmap_, page_header_->record_capacity);
+    if (!bitmap.get_bit(rid.slot_num)) {
+      LOG_ERROR("Slot %d is empty, cannot fetch record on page %d.",
+                rid.slot_num, frame_->page_num());
+      return RC::RECORD_NOT_EXIST;
+    }
+  
+    // 3. Allocate record buffer and set ownership
+    const int record_size = page_header_->record_real_size;
+    RC rc = record.new_record(record_size);
+    if (rc != RC::SUCCESS) {
+      LOG_ERROR("Failed to allocate record buffer, size=%d. rc=%s", record_size, strrc(rc));
+      return rc;
+    }
+  
+    // 4. Copy each field into record at correct offset
+    int offset = 0;
+    for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
+      int field_len = get_field_len(col_id);
+      char *src = get_field_data(rid.slot_num, col_id);
+      rc = record.set_field(offset, field_len, src);
+      if (rc != RC::SUCCESS) {
+        LOG_ERROR("Failed to set field for col %d, offset=%d, len=%d. rc=%s",
+                  col_id, offset, field_len, strrc(rc));
+        return rc;
+      }
+      offset += field_len;
+    }
+  
+    // 5. Set record ID
+    record.set_rid(rid);
+    return RC::SUCCESS;
 }
 
 // TODO: specify the column_ids that chunk needed. currenly we get all columns
