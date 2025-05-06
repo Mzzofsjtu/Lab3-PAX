@@ -420,18 +420,22 @@ RC PaxRecordPageHandler::insert_record(const char *data, RID *rid)
   ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, 
     "cannot insert record into page while the page is readonly");
  
+  // 判断页面是否已满。
   if (page_header_->record_num == page_header_->record_capacity) {
     LOG_WARN("Page is full, page_num %d:%d.", disk_buffer_pool_->file_desc(), frame_->page_num());
     return RC::RECORD_NOMEM;
   }
  
+  // Find empty location.
+  // 从 bitmap 中获取页面索引。
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
   int    bitmapIndex = bitmap.next_unsetted_bit(0);
   ASSERT(bitmapIndex >= 0, "The bit_map index smaller than 0!\n");
   bitmap.set_bit(bitmapIndex);
   page_header_->record_num++;
  
-
+  // The RC dealing with problems.
+  // 更新log。log是缓存系统的重要部份。
   RC rc = log_handler_.insert_record(frame_, RID(get_page_num(), bitmapIndex), data);
   if (OB_FAIL(rc)) {
     LOG_ERROR("Failed to insert record. page_num %d:%d. rc=%s", disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
@@ -454,7 +458,7 @@ RC PaxRecordPageHandler::insert_record(const char *data, RID *rid)
     rid->slot_num = bitmapIndex;
   }
  
- 
+  // LOG_TRACE("Insert record. rid page_num=%d, slot num=%d", get_page_num(), index);
   return RC::SUCCESS;
 }
 
