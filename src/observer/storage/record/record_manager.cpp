@@ -535,25 +535,23 @@ RC PaxRecordPageHandler::get_chunk(Chunk &chunk)
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
   int capacity = page_header_->record_capacity;
 
-  // For each column, build Column with correct type from schema
+  // For each column, create a new Column and append data
   for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
-    // Retrieve metadata for this column
-    const FieldMeta *fm = table_meta_->field(col_id);
-    AttrType attr_type = fm->type();
-    int field_len = fm->len();
+    int field_len = get_field_len(col_id);
+    // Use CHARS since PAX stores raw bytes per field
+    auto col_ptr = std::make_unique<Column>(AttrType::CHARS, field_len);
 
-    auto col_ptr = std::make_unique<Column>(attr_type, field_len);
-    // Append all valid rows for this column
+    // Append data for each valid slot
     for (int slot = 0; slot < capacity; ++slot) {
       if (!bitmap.get_bit(slot)) continue;
       char *src = get_field_data(slot, col_id);
       col_ptr->append(src, field_len);
     }
 
-    // Add column to chunk
+    // Add this column to chunk
     chunk.add_column(std::move(col_ptr), col_id);
   }
-  
+
   return RC::SUCCESS;
 }
 
