@@ -437,7 +437,7 @@ RC PaxRecordPageHandler::insert_record(const char *data, RID *rid)
   }
 
   // 按列拆分数据并存储到对应位置
-  int *col_idx = reinterpret_cast<int *>(frame_->data() + page_header_->col_idx_offset);
+  // int *col_idx = reinterpret_cast<int *>(frame_->data() + page_header_->col_idx_offset);
   char *record_data = nullptr;
   for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
     int field_len = get_field_len(col_id);
@@ -500,7 +500,7 @@ RC PaxRecordPageHandler::get_record(const RID &rid, Record &record)
   memset(record_data, 0, record_size);
 
   // 从每列读取数据并组合成完整记录
-  int *col_idx = reinterpret_cast<int *>(frame_->data() + page_header_->col_idx_offset);
+  // int *col_idx = reinterpret_cast<int *>(frame_->data() + page_header_->col_idx_offset);
   for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
     int field_len = get_field_len(col_id);
     char *field_data = get_field_data(rid.slot_num, col_id);
@@ -520,20 +520,20 @@ RC PaxRecordPageHandler::get_record(const RID &rid, Record &record)
 RC PaxRecordPageHandler::get_chunk(Chunk &chunk)
 {
   // your code here
-  const vector<int> &column_ids = chunk.column_ids();
-
-  // 初始化 chunk 的数据
-  chunk.init(page_header_->record_capacity, column_ids.size());
-
   // 遍历所有槽位，收集有效记录的数据
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
   for (int slot_num = 0; slot_num < page_header_->record_capacity; ++slot_num) {
     if (bitmap.get_bit(slot_num)) {
-      for (size_t i = 0; i < column_ids.size(); ++i) {
-        int col_id = column_ids[i];
+      for (int col_id = 0; col_id < page_header_->column_num; ++col_id) {
         int field_len = get_field_len(col_id);
         char *field_data = get_field_data(slot_num, col_id);
-        chunk.append_data(i, field_data, field_len);
+
+        // 创建一个新的 Column 对象来存储该列的数据
+        unique_ptr<Column> col = make_unique<Column>(AttrType::CHARS, field_len);
+        col->append(field_data, field_len);
+
+        // 将 Column 对象添加到 Chunk 中
+        chunk.add_column(move(col), col_id);
       }
     }
   }
